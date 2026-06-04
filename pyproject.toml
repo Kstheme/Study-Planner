@@ -13,4 +13,5 @@ dependencies = [
 [tool.pytest.ini_options]
 markers = [
     "integration: tests that require external services such as PostgreSQL",
+    "manual: tests that require manual RealLLM acceptance setup",
 ]

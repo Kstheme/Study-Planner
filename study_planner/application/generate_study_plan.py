@@ -19,10 +19,26 @@ class StudyPlanGenerationError(ValueError):
 
 
 class GenerateStudyPlanUseCase:
-    def __init__(self, llm: Any):
+    def __init__(self, llm: Any | None = None, workflow: Any | None = None):
+        if llm is None and workflow is None:
+            raise TypeError("llm or workflow is required")
         self.llm = llm
+        self.workflow = workflow
 
     def execute(self, goal: StudyGoal) -> StudyPlan:
+        if self.workflow is not None:
+            state = self.workflow.run(goal)
+            self.last_workflow_state = state
+            if getattr(state, "errors", None):
+                detail = "; ".join(getattr(error, "message", str(error)) for error in state.errors)
+                raise StudyPlanGenerationError(f"workflow study plan generation failed: {detail}")
+            if state.final_plan is None:
+                raise StudyPlanGenerationError("workflow did not generate a study plan")
+            plan = state.final_plan
+            self._normalize_plan_dates(plan)
+            self._validate(plan)
+            return plan
+
         payload = self.llm.generate_study_plan(goal)
         if not payload:
             raise StudyPlanGenerationError("学习计划生成结果为空")
