@@ -18,13 +18,14 @@ class _ConfiguredChatModel:
     def invoke(self, prompt: str):
         base_url = self.config.get("base_url", "").rstrip("/")
         url = f"{base_url}/chat/completions"
-        body = json.dumps(
-            {
-                "model": self.config["model"],
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.2,
-            }
-        ).encode("utf-8")
+        request_body = {
+            "model": self.config["model"],
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.2,
+        }
+        if self.config.get("provider") == "deepseek":
+            request_body["response_format"] = {"type": "json_object"}
+        body = json.dumps(request_body).encode("utf-8")
         request = urllib.request.Request(
             url,
             data=body,
@@ -144,10 +145,12 @@ class RealStudyPlanLLM:
     def generate_study_plan(self, goal: StudyGoal) -> dict[str, Any]:
         prompt = build_study_plan_prompt(goal)
         last_error: Exception | None = None
+        last_content = ""
 
         for _ in range(self.max_retries + 1):
             response = self.chat_model.invoke(prompt)
             content = self._content_from_response(response)
+            last_content = content
             try:
                 payload = json.loads(self._extract_json(content))
                 if not isinstance(payload, dict):
@@ -156,7 +159,17 @@ class RealStudyPlanLLM:
             except (json.JSONDecodeError, StudyPlanGenerationError) as exc:
                 last_error = exc
 
-        raise StudyPlanGenerationError("真实 LLM 返回内容无法解析为学习计划") from last_error
+        if self.config.get("use_real_llm"):
+            try:
+                repaired = self._repair_json_response(last_content, goal)
+                payload = json.loads(self._extract_json(repaired))
+                if isinstance(payload, dict):
+                    return payload
+            except Exception as exc:
+                last_error = exc
+
+        snippet = self._safe_snippet(last_content)
+        raise StudyPlanGenerationError(f"真实 LLM 返回内容无法解析为学习计划。返回片段: {snippet}") from last_error
 
     def _content_from_response(self, response: Any) -> str:
         if hasattr(response, "content"):
@@ -175,3 +188,20 @@ class RealStudyPlanLLM:
         if start != -1 and end != -1 and start < end:
             return stripped[start : end + 1]
         return stripped
+
+    def _repair_json_response(self, content: str, goal: StudyGoal) -> str:
+        from datetime import date
+
+        repair_prompt = (
+            "请把下面内容转换成合法 JSON 对象，且只能输出 JSON。\n"
+            "必须包含字段 overall_route, phases, methods, risks, review_schedule, suggestions。\n"
+            "phases[].weekly_plans[].tasks[] 必须存在。\n"
+            f"今天日期不能早于: {date.today().isoformat()}\n"
+            f"截止日期不能晚于: {goal.deadline.isoformat()}\n"
+            f"原始内容:\n{content}"
+        )
+        return self._content_from_response(self.chat_model.invoke(repair_prompt))
+
+    def _safe_snippet(self, content: str, limit: int = 300) -> str:
+        text = re.sub(r"\s+", " ", content or "").strip()
+        return text[:limit] if text else "<empty>"

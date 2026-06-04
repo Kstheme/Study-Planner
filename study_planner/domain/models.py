@@ -158,3 +158,49 @@ class KnowledgePoint:
     difficulty: int = 1
     importance: int = 1
     mastery_level: int = 0
+
+
+@dataclass
+class TaskProgress:
+    task_id: str
+    status: str
+    planned_date: date
+    actual_completed_at: datetime | None = None
+    duration_minutes: int = 0
+    related_topics: list[str] = field(default_factory=list)
+    notes: str = ""
+
+
+@dataclass
+class ReviewReport:
+    period_start: date
+    period_end: date
+    completion_rate: float
+    completed_task_count: int
+    total_task_count: int
+    overdue_tasks: list[str] = field(default_factory=list)
+    consecutive_unfinished_topics: list[str] = field(default_factory=list)
+    weak_points: list[str] = field(default_factory=list)
+    summary: str = ""
+    suggestions: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ReplanRequest:
+    original_plan: StudyPlan
+    review_report: ReviewReport
+    remaining_tasks: list[StudyTask]
+    remaining_days: int
+    daily_available_minutes: int
+    need_replan: bool = False
+    replan_type: str = "minor"
+
+
+@dataclass
+class AdjustedStudyPlan:
+    original_plan: StudyPlan
+    adjusted_plan: StudyPlan
+    review_report: ReviewReport
+    changed_tasks: list[dict] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    saved: bool = False
