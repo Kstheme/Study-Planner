@@ -22,12 +22,25 @@ from study_planner.application.material_rag import (
 )
 from study_planner.infrastructure.rag.factory import build_material_rag_services
 from study_planner.interfaces.streamlit.persistence_state import render_storage_status, restore_persistent_state
+from study_planner.interfaces.streamlit.ui_components import (
+    inject_global_styles,
+    render_material_charts,
+    render_page_header,
+    render_section_title,
+    render_workflow_steps,
+)
 
 
 st.set_page_config(page_title="资料问答", page_icon="📎", layout="wide")
-st.title("📎 资料问答")
+inject_global_styles()
+render_page_header(
+    "资料问答",
+    "把课程资料、笔记和 PDF 变成可检索知识库，围绕当前学习计划提问、摘要和生成复习卡片。",
+    "F3 · Material QA",
+)
 storage_service = restore_persistent_state()
 render_storage_status()
+render_workflow_steps(active_index=2)
 
 
 class UploadedFileAdapter:
@@ -95,10 +108,18 @@ def _all_chunks():
     return st.session_state["material_chunks"]
 
 
+def _long_task_spinner(message: str):
+    return st.spinner(message)
+
+
 _init_state()
 
 view = build_material_qa_view(st.session_state["materials"], st.session_state["latest_answer"])
 
+render_section_title("资料质量分析")
+render_material_charts(st.session_state["materials"], st.session_state["latest_answer"])
+
+render_section_title("资料导入")
 upload_col, note_col = st.columns(2)
 
 with upload_col:

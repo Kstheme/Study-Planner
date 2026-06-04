@@ -22,12 +22,25 @@ from study_planner.application.review_replan import (
 from study_planner.application.agent_workflow import build_replan_workflow_planner
 from study_planner.application.persistence import StorageError
 from study_planner.interfaces.streamlit.persistence_state import render_storage_status, restore_persistent_state
+from study_planner.interfaces.streamlit.ui_components import (
+    inject_global_styles,
+    render_page_header,
+    render_review_charts,
+    render_section_title,
+    render_workflow_steps,
+)
 
 
 st.set_page_config(page_title="复盘与动态调整", page_icon="🧭", layout="wide")
-st.title("复盘与动态调整")
+inject_global_styles()
+render_page_header(
+    "复盘与动态调整",
+    "基于真实任务状态生成复盘报告，识别薄弱点和延期风险，再决定是否保存调整后的计划。",
+    "F5 · Review & Replan",
+)
 storage_service = restore_persistent_state()
 render_storage_status()
+render_workflow_steps(active_index=3)
 
 
 class SessionPlanRepository:
@@ -91,6 +104,10 @@ def _report_to_metrics(report):
     cols[3].metric("延期任务", len(report.overdue_tasks))
 
 
+def _long_task_spinner(message: str):
+    return st.spinner(message)
+
+
 plan = st.session_state.get("study_plan")
 pending_plan = st.session_state.get("pending_adjusted_plan")
 view = build_review_page_view(plan, pending_adjusted_plan=pending_plan)
@@ -99,7 +116,7 @@ if view.is_empty:
     st.info(view.empty_message)
     st.stop()
 
-st.subheader("完成情况")
+render_section_title("完成情况")
 st.dataframe([_row_to_dict(row) for row in view.progress_rows], use_container_width=True)
 
 review_text = st.text_area("本周复盘", value=st.session_state.get("review_text", ""), height=160)
@@ -161,8 +178,11 @@ if cancel_clicked:
     st.rerun()
 
 report = st.session_state.get("last_review_report")
+render_section_title("复盘分析")
+render_review_charts(view, report)
+
 if report:
-    st.subheader("复盘报告")
+    render_section_title("复盘报告")
     _report_to_metrics(report)
     st.write(report.summary)
 
@@ -188,7 +208,7 @@ if report:
 
 if pending_plan:
     preview_view = build_review_page_view(plan, pending_adjusted_plan=pending_plan)
-    st.subheader("调整前后对比")
+    render_section_title("调整前后对比")
 
     before_col, after_col = st.columns(2)
     with before_col:

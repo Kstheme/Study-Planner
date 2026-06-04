@@ -30,6 +30,14 @@ from study_planner.interfaces.streamlit.persistence_state import (
     restore_persistent_state,
     save_plan_to_storage,
 )
+from study_planner.interfaces.streamlit.ui_components import (
+    inject_global_styles,
+    render_dashboard_charts,
+    render_info_cards,
+    render_page_header,
+    render_section_title,
+    render_workflow_steps,
+)
 
 
 STATUS_LABELS = {
@@ -41,9 +49,15 @@ STATUS_LABELS = {
 
 
 st.set_page_config(page_title="学习计划看板", page_icon="📋", layout="wide")
-st.title("📋 学习计划看板")
+inject_global_styles()
+render_page_header(
+    "学习计划看板",
+    "查看目标、负载、进度和阶段任务；在这里保存每个任务的真实执行状态。",
+    "F2 · Plan Dashboard",
+)
 storage_service = restore_persistent_state()
 render_storage_status()
+render_workflow_steps(active_index=1)
 
 
 def _ensure_task_ids(plan: StudyPlan) -> StudyPlan:
@@ -244,7 +258,7 @@ if view.is_empty:
 plan = st.session_state.get("study_plan")
 
 summary = view.goal_summary
-st.subheader("目标摘要")
+render_section_title("目标摘要")
 metric_cols = st.columns(4)
 metric_cols[0].metric("学习主题", summary["subject"])
 metric_cols[1].metric("当前水平", summary["current_level"])
@@ -253,44 +267,38 @@ metric_cols[3].metric("每周学习", f"{summary['weekly_available_days']} 天")
 st.write(f"目标：{summary['target']}")
 st.write(f"截止日期：{summary['deadline'].isoformat()}")
 
-st.subheader("总体路线")
-st.write(view.overall_route)
+render_info_cards(
+    [
+        ("总体路线", view.overall_route),
+        ("学习方法", "、".join(view.methods) if view.methods else "暂无"),
+        ("复习安排", view.review_schedule.review_strategy if view.review_schedule else "暂无"),
+    ]
+)
 
-st.subheader("进度")
+render_section_title("进度总览")
 progress_cols = st.columns(3)
 progress_cols[0].metric("总任务", view.progress.total_tasks)
 progress_cols[1].metric("已完成", view.progress.done_tasks)
 progress_cols[2].metric("完成率", f"{view.progress.completion_rate}%")
 st.progress(view.progress.completion_rate / 100)
 
-chart_col1, chart_col2 = st.columns(2)
-with chart_col1:
-    st.caption("每日计划分钟数")
-    if view.daily_minutes_chart_data:
-        st.bar_chart({day.isoformat(): minutes for day, minutes in view.daily_minutes_chart_data.items()})
-    else:
-        st.info("暂无每日分钟数数据")
-with chart_col2:
-    st.caption("每周计划分钟数")
-    if view.weekly_minutes_chart_data:
-        st.bar_chart({f"第{week}周": minutes for week, minutes in view.weekly_minutes_chart_data.items()})
-    else:
-        st.info("暂无每周分钟数数据")
+render_section_title("学习分析")
+render_dashboard_charts(plan, today=date.today())
 
-st.subheader("今日任务")
+render_section_title("今日任务")
 if view.today_tasks:
     st.table([_format_task(task) for task in view.today_tasks])
 else:
     st.info(view.today_empty_message)
 
-st.subheader("本周任务")
+render_section_title("本周任务")
 week_tasks = get_current_week_tasks(plan, today=date.today())
 if week_tasks:
     st.table([_format_task(task) for task in week_tasks])
 else:
     st.info("本周没有学习任务。")
 
-st.subheader("阶段计划")
+render_section_title("阶段计划")
 tabs = st.tabs([f"阶段 {phase.phase_index}：{phase.title}" for phase in view.phase_tabs])
 for tab, phase in zip(tabs, view.phase_tabs):
     with tab:

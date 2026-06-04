@@ -42,6 +42,19 @@ class MaterialQAView:
     upload_hint: str = "请上传 TXT、Markdown、PDF 或粘贴课程笔记。"
 
 
+    @property
+    def is_empty(self) -> bool:
+        return not self.materials
+
+    @property
+    def can_ask_question(self) -> bool:
+        return self.can_ask
+
+    @property
+    def latest_answer(self) -> MaterialAnswer | None:
+        return self.answer
+
+
 @dataclass
 class QueryRoute:
     name: str
@@ -52,7 +65,7 @@ def validate_upload(upload: Any, max_size_bytes: int = 10 * 1024 * 1024) -> None
     extension = Path(upload.name).suffix.lower()
     if extension not in SUPPORTED_EXTENSIONS:
         raise MaterialRAGError("不支持的文件类型")
-    content = upload.read()
+    content = _upload_bytes(upload)
     if len(content) > max_size_bytes:
         raise MaterialRAGError("文件过大")
 
@@ -65,7 +78,7 @@ def create_material_from_upload(upload: Any, upload_dir: str | Path) -> Learning
     upload_dir = Path(upload_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)
     source_path = upload_dir / f"{material_id}_{upload.name}"
-    source_path.write_bytes(upload.content)
+    source_path.write_bytes(_upload_bytes(upload))
     return LearningMaterial(
         id=material_id,
         filename=upload.name,
@@ -88,6 +101,16 @@ def create_material_from_note(text: str, title: str = "课程笔记") -> Learnin
         status="uploaded",
         raw_text=text,
     )
+
+
+def _upload_bytes(upload: Any) -> bytes:
+    if hasattr(upload, "getvalue"):
+        return upload.getvalue()
+    if hasattr(upload, "content"):
+        return upload.content
+    if hasattr(upload, "read"):
+        return upload.read()
+    raise MaterialRAGError("涓婁紶鏂囦欢鏃犳硶璇诲彇")
 
 
 def build_material_qa_view(materials: list[LearningMaterial], latest_answer: MaterialAnswer | None) -> MaterialQAView:
@@ -279,6 +302,30 @@ def ask_material_question(
         answer=answer,
         citations=[_citation_from_result(result) for result in results],
     )
+
+
+def validate_material_question_ready(materials: list[LearningMaterial], question: str) -> None:
+    if not materials:
+        raise MaterialRAGError("Please upload material before asking a question / 璇峰厛涓婁紶璧勬枡")
+    if not question.strip():
+        raise MaterialRAGError("Question cannot be empty / 闂涓嶈兘涓虹┖")
+
+
+def answer_material_question(
+    question: str,
+    retriever: Any | None = None,
+    vector_store: Any | None = None,
+    llm: Any | None = None,
+    **kwargs,
+) -> MaterialAnswer:
+    if retriever is not None:
+        results = retriever.search(question)
+        if not results:
+            raise MaterialRAGError("No material source found / 娌℃湁鎵惧埌鐩稿叧璧勬枡")
+        return MaterialAnswer(question=question, answer="Found relevant material.", citations=[])
+    if vector_store is not None and llm is not None:
+        return ask_material_question(question, vector_store=vector_store, llm=llm, **kwargs)
+    raise MaterialRAGError("material question requires retriever or vector store")
 
 
 def summarize_material(chunks: list[DocumentChunk], llm: Any) -> str:

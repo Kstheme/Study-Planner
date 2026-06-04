@@ -38,6 +38,24 @@ class ExportPageView:
     disabled_formats: list[str] = field(default_factory=list)
     summary: dict[str, Any] = field(default_factory=dict)
 
+    @property
+    def is_empty(self) -> bool:
+        return not self.can_export
+
+    @property
+    def can_export_markdown(self) -> bool:
+        return "markdown" in self.available_formats
+
+    @property
+    def can_export_html(self) -> bool:
+        return "html" in self.available_formats
+
+
+@dataclass
+class ExportExperienceView:
+    preview_html: str
+    format_guidance: dict[str, str]
+
 
 class Exporter(Protocol):
     def export(self, request: ExportRequest) -> ExportResult:
@@ -135,7 +153,10 @@ class MarkdownExporter:
     mime_type = "text/markdown; charset=utf-8"
     extension = ".md"
 
-    def export(self, request: ExportRequest) -> ExportResult:
+    def export(self, request: ExportRequest | StudyPlan) -> ExportResult | str:
+        return_content_only = isinstance(request, StudyPlan)
+        if return_content_only:
+            request = ExportRequest(study_plan=request, format="markdown")
         plan = _require_plan(request.study_plan)
         lines: list[str] = []
         lines.append(f"# {_safe_text(plan.goal.subject)} 学习计划")
@@ -150,19 +171,23 @@ class MarkdownExporter:
         lines.extend(_markdown_section("建议", [_safe_text(plan.suggestions)]))
         lines.extend(_markdown_review_report(request.review_report))
         content = "\n".join(lines).rstrip() + "\n"
-        return ExportResult(
+        result = ExportResult(
             filename=generate_export_filename(plan, "markdown", _exported_at(request)),
             content=content,
             mime_type=self.mime_type,
             extension=self.extension,
         )
+        return result.content if return_content_only else result
 
 
 class HTMLExporter:
     mime_type = "text/html; charset=utf-8"
     extension = ".html"
 
-    def export(self, request: ExportRequest) -> ExportResult:
+    def export(self, request: ExportRequest | StudyPlan) -> ExportResult | str:
+        return_content_only = isinstance(request, StudyPlan)
+        if return_content_only:
+            request = ExportRequest(study_plan=request, format="html")
         plan = _require_plan(request.study_plan)
         title = f"{_safe_text(plan.goal.subject)} 学习计划"
         body: list[str] = []
@@ -191,12 +216,13 @@ class HTMLExporter:
             + "\n".join(body)
             + "\n</main>\n</body>\n</html>\n"
         )
-        return ExportResult(
+        result = ExportResult(
             filename=generate_export_filename(plan, "html", _exported_at(request)),
             content=content,
             mime_type=self.mime_type,
             extension=self.extension,
         )
+        return result.content if return_content_only else result
 
 
 class PDFExporter:
@@ -212,6 +238,9 @@ class ExportStudyPlanUseCase:
         repository: Any | None = None,
         llm: Any | None = None,
     ):
+        self._return_content_only = exporters is not None and not isinstance(exporters, dict)
+        if exporters is not None and not isinstance(exporters, dict):
+            exporters = {"markdown": exporters}
         self.exporters = exporters or {
             "markdown": MarkdownExporter(),
             "html": HTMLExporter(),
@@ -229,8 +258,8 @@ class ExportStudyPlanUseCase:
     def from_repository(cls, repository: Any):
         return cls(repository=repository)
 
-    def execute(self, request: ExportRequest) -> ExportResult:
-        format_name = _normalize_format(request.format)
+    def execute(self, request: ExportRequest) -> ExportResult | str:
+        format_name = _normalize_format(request.format or ("markdown" if self._return_content_only else ""))
         if not format_name:
             raise ExportPlanError("导出格式不能为空 / export format is required")
         exporter = self.exporters.get(format_name)
@@ -244,7 +273,10 @@ class ExportStudyPlanUseCase:
             exported_at=request.exported_at,
         )
         _require_plan(resolved.study_plan)
-        return exporter.export(resolved)
+        result = exporter.export(resolved)
+        if self._return_content_only and isinstance(result, ExportResult):
+            return result.content
+        return result
 
     def _load_plan(self) -> StudyPlan | None:
         if self.session_state is not None:
@@ -274,6 +306,18 @@ def build_export_page_view(study_plan: StudyPlan | None) -> ExportPageView:
             "deadline": study_plan.goal.deadline,
             "phase_count": len(study_plan.phases),
             "task_count": len(_all_tasks(study_plan)),
+        },
+    )
+
+
+def build_export_experience_view(study_plan: StudyPlan | None) -> ExportExperienceView:
+    preview_html = HTMLExporter().export(study_plan) if study_plan is not None else ""
+    return ExportExperienceView(
+        preview_html=preview_html,
+        format_guidance={
+            "markdown": "适合继续编辑和复制到笔记工具。",
+            "html": "适合直接打开、打印和分享。",
+            "pdf": "预留格式，后续支持。",
         },
     )
 
