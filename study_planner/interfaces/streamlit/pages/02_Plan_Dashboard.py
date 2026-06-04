@@ -237,8 +237,11 @@ if view.is_empty:
         _save_plan(_load_demo_plan())
         st.rerun()
     st.stop()
+    if "study_plan" not in st.session_state:
+        st.session_state["study_plan"] = _load_demo_plan()
+        view = build_dashboard_view(st.session_state["study_plan"], today=date.today())
 
-plan = st.session_state["study_plan"]
+plan = st.session_state.get("study_plan")
 
 summary = view.goal_summary
 st.subheader("目标摘要")

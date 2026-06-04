@@ -11,7 +11,6 @@ if str(PROJECT_ROOT) not in sys.path:
 from study_planner.application.review_replan import (
     GenerateReviewReportUseCase,
     ReviewReplanError,
-    SimpleReplanPlanner,
     build_f5_llm_from_env,
     build_replan_request,
     build_review_page_view,
@@ -20,6 +19,7 @@ from study_planner.application.review_replan import (
     save_adjusted_plan,
     validate_adjusted_plan,
 )
+from study_planner.application.agent_workflow import build_replan_workflow_planner
 from study_planner.application.persistence import StorageError
 from study_planner.interfaces.streamlit.persistence_state import render_storage_status, restore_persistent_state
 
@@ -142,7 +142,7 @@ if replan_clicked:
         request = build_replan_request(plan, report, current_date=date.today())
         preview = generate_adjustment_preview(
             request,
-            planner=SimpleReplanPlanner(current_date=date.today()),
+            planner=build_replan_workflow_planner(PROJECT_ROOT / ".env", debug=True),
             session_state=st.session_state,
         )
         validation = validate_adjusted_plan(preview.adjusted_plan, current_date=date.today())

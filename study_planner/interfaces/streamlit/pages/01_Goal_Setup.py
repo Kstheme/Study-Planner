@@ -8,10 +8,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from study_planner.application.generate_study_plan import GenerateStudyPlanUseCase, StudyPlanGenerationError
+from study_planner.application.agent_workflow import build_plan_workflow_use_case, workflow_trace_rows
+from study_planner.application.generate_study_plan import StudyPlanGenerationError
 from study_planner.application.persistence import StorageError
 from study_planner.application.study_goal_input import collect_study_goal
-from study_planner.infrastructure.llm.real_study_plan_llm import RealStudyPlanLLM
 from study_planner.interfaces.streamlit.persistence_state import (
     render_storage_status,
     restore_persistent_state,
@@ -105,9 +105,10 @@ if submitted:
             st.markdown(f"**薄弱点**：{'、'.join(study_goal.weak_points) if study_goal.weak_points else '无'}")
 
         with st.spinner("正在生成个性化学习计划..."):
-            llm = RealStudyPlanLLM.from_env(PROJECT_ROOT / ".env")
-            study_plan = GenerateStudyPlanUseCase(llm=llm).execute(study_goal)
+            use_case = build_plan_workflow_use_case(PROJECT_ROOT / ".env", debug=True)
+            study_plan = use_case.execute(study_goal)
             st.session_state["study_plan"] = study_plan
+            st.session_state["last_workflow_trace"] = workflow_trace_rows(use_case.last_workflow_state.trace)
 
         try:
             plan_id = save_goal_and_plan_to_storage(storage_service, study_goal, study_plan)
@@ -116,6 +117,10 @@ if submitted:
             st.warning(f"学习计划已生成，但持久化保存失败：{exc}")
 
         st.info("下一步进入 02 Plan Dashboard 查看和编辑学习计划。")
+
+        if st.session_state.get("last_workflow_trace"):
+            with st.expander("Agent 工作流执行链路", expanded=False):
+                st.dataframe(st.session_state["last_workflow_trace"], use_container_width=True, hide_index=True)
 
     except (ValueError, StudyPlanGenerationError) as exc:
         st.error(str(exc))
