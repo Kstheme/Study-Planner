@@ -33,7 +33,15 @@ def get_storage_service() -> StorageService:
     return build_storage_service(settings)
 
 
-def build_storage_service(settings: AppSettings) -> StorageService:
+def build_storage_service(
+    settings: AppSettings | str | Path = PROJECT_ROOT / ".env",
+    *,
+    env_path: str | Path | None = None,
+) -> StorageService:
+    if env_path is not None:
+        settings = env_path
+    if isinstance(settings, str | Path):
+        settings = load_app_settings(settings)
     if settings.use_postgres_persistence:
         return _build_postgres_storage_service(settings)
     return _build_in_memory_storage_service()

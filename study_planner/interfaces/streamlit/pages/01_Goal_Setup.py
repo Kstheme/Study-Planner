@@ -17,14 +17,31 @@ from study_planner.interfaces.streamlit.persistence_state import (
     restore_persistent_state,
     save_goal_and_plan_to_storage,
 )
+from study_planner.interfaces.streamlit.ui_components import (
+    inject_global_styles,
+    render_info_cards,
+    render_page_header,
+    render_workflow_steps,
+)
 
 
 st.set_page_config(page_title="学习目标配置", page_icon="🎯", layout="wide")
-
-st.title("🎯 学习目标配置")
+inject_global_styles()
+render_page_header(
+    "学习目标配置",
+    "把主题、目标、时间和偏好整理成清晰输入，生成后续看板、资料问答、复盘和导出的基础计划。",
+    "F1 · Goal Setup",
+)
 storage_service = restore_persistent_state()
 render_storage_status()
-st.markdown("填写学习目标和时间约束，系统会生成可执行的阶段、周和每日任务计划。")
+render_workflow_steps(active_index=0)
+render_info_cards(
+    [
+        ("输入质量决定计划质量", "目标越具体，阶段、周计划和每日任务越容易落地。"),
+        ("时间预算影响任务密度", "每日学习时长和每周学习天数会被用于排程和复盘。"),
+        ("薄弱点会进入后续调整", "复盘和自动重排会优先关注你标记的薄弱主题。"),
+    ]
+)
 
 with st.form("learning_goal_form"):
     col1, col2 = st.columns(2)

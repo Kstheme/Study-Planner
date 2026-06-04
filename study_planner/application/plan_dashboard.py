@@ -24,6 +24,10 @@ class PhaseTab:
     milestone: str
     weekly_plans: list[WeeklyPlan] = field(default_factory=list)
 
+    @property
+    def weekly_sections(self) -> list[WeeklyPlan]:
+        return self.weekly_plans
+
 
 @dataclass
 class ProgressSummary:
@@ -52,6 +56,10 @@ class DashboardView:
     progress_chart_data: dict = field(default_factory=dict)
     daily_minutes_chart_data: dict = field(default_factory=dict)
     weekly_minutes_chart_data: dict = field(default_factory=dict)
+
+    @property
+    def phase_sections(self) -> list[PhaseTab]:
+        return self.phase_tabs
 
 
 @dataclass
@@ -225,6 +233,27 @@ def update_task(
     task.notes = notes
     _validate_daily_load(updated)
     return updated
+
+
+def update_task_progress(
+    plan: StudyPlan,
+    task_id: str,
+    status: str | None = None,
+    new_date: date | None = None,
+    duration_minutes: int | None = None,
+    notes: str | None = None,
+    today: date | None = None,
+) -> StudyPlan:
+    current = _find_task(plan, task_id)
+    return update_task(
+        plan,
+        task_id=task_id,
+        status=status if status is not None else current.status,
+        new_date=new_date if new_date is not None else current.date,
+        duration_minutes=duration_minutes if duration_minutes is not None else current.duration_minutes,
+        notes=notes if notes is not None else current.notes,
+        today=today,
+    )
 
 
 def _find_task(plan: StudyPlan, task_id: str) -> StudyTask:

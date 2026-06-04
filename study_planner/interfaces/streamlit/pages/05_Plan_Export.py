@@ -16,12 +16,25 @@ from study_planner.application.plan_export import (
     build_export_page_view,
 )
 from study_planner.interfaces.streamlit.persistence_state import render_storage_status, restore_persistent_state
+from study_planner.interfaces.streamlit.ui_components import (
+    inject_global_styles,
+    render_export_format_cards,
+    render_page_header,
+    render_section_title,
+    render_workflow_steps,
+)
 
 
 st.set_page_config(page_title="学习计划导出", page_icon="📤", layout="wide")
-st.title("学习计划导出")
+inject_global_styles()
+render_page_header(
+    "学习计划导出",
+    "把当前已确认计划和最近复盘报告整理成 Markdown 或专业 HTML 文件，方便分享、打印和归档。",
+    "F6 · Plan Export",
+)
 restore_persistent_state()
 render_storage_status()
+render_workflow_steps(active_index=4)
 
 
 def _render_workflow_hint() -> None:
@@ -71,18 +84,22 @@ if not view.can_export:
 if st.session_state.get("pending_adjusted_plan") is not None:
     st.warning("检测到尚未保存的调整预览。导出默认使用当前已确认计划；如需导出调整结果，请先在复盘与动态调整页面保存。")
 
-st.subheader("导出对象")
+render_section_title("导出对象")
 _render_summary(view)
 
-st.subheader("复盘报告")
+render_section_title("复盘报告")
 _render_report_summary(report)
 
-st.subheader("下载文件")
+render_section_title("导出格式")
+render_export_format_cards()
+
+render_section_title("下载文件")
 try:
-    markdown_result = _build_export("markdown")
-    html_result = _build_export("html")
-    markdown_payload = build_download_payload(markdown_result)
-    html_payload = build_download_payload(html_result)
+    with st.spinner("正在生成导出文件..."):
+        markdown_result = _build_export("markdown")
+        html_result = _build_export("html")
+        markdown_payload = build_download_payload(markdown_result)
+        html_payload = build_download_payload(html_result)
 except (ExportPlanError, ValueError) as exc:
     st.error(str(exc))
     st.stop()

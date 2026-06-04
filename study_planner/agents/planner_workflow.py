@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import asdict, is_dataclass
+from pathlib import Path
 from time import perf_counter
 from typing import Any
 
@@ -14,6 +15,26 @@ from study_planner.agents.nodes.resource import ResourceAgent
 from study_planner.agents.planner_state import PlannerState, WorkflowError
 from study_planner.domain.models import StudyPlan
 from study_planner.infrastructure.settings import load_app_settings
+
+
+def _missing_declared_real_llm_config(env_path: str | Path) -> set[str]:
+    path = Path(env_path)
+    if not path.exists():
+        return set()
+
+    declared: dict[str, str] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        declared[key.strip()] = value.strip().strip('"').strip("'")
+
+    if declared.get("USE_REAL_LLM", "").strip().lower() not in {"1", "true", "yes", "y", "on"}:
+        return set()
+
+    required = {"DEEPSEEK_API_KEY", "DEEPSEEK_MODEL"}
+    return {key for key in required if not declared.get(key)}
 
 
 class PlannerWorkflow:
@@ -90,6 +111,11 @@ class PlannerWorkflow:
             kwargs.setdefault("max_retries", 1)
             return cls(llm=FlakyLLM(failures_before_success=1), **kwargs)
         if settings.use_real_llm:
+            missing_from_declared_env = _missing_declared_real_llm_config(_env_path)
+            if "DEEPSEEK_API_KEY" in missing_from_declared_env:
+                raise ValueError("DEEPSEEK_API_KEY is required when USE_REAL_LLM=true.")
+            if "DEEPSEEK_MODEL" in missing_from_declared_env:
+                raise ValueError("DEEPSEEK_MODEL is required when USE_REAL_LLM=true.")
             if not settings.deepseek_api_key:
                 raise ValueError("DEEPSEEK_API_KEY is required when USE_REAL_LLM=true.")
             if not settings.deepseek_model:
