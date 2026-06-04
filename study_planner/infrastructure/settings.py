@@ -9,6 +9,7 @@ from pathlib import Path
 class AppSettings:
     use_real_llm: bool = False
     use_real_rag_store: bool = False
+    use_postgres_persistence: bool = False
     deepseek_api_key: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"
     deepseek_model: str = ""
@@ -22,10 +23,11 @@ def load_app_settings(env_path: str | Path = ".env") -> AppSettings:
     return AppSettings(
         use_real_llm=_as_bool(_get(values, "USE_REAL_LLM", "false")),
         use_real_rag_store=_as_bool(_get(values, "USE_REAL_RAG_STORE", "false")),
+        use_postgres_persistence=_as_bool(_get(values, "USE_POSTGRES_PERSISTENCE", "false")),
         deepseek_api_key=_get(values, "DEEPSEEK_API_KEY", ""),
         deepseek_base_url=_get(values, "DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
         deepseek_model=_get(values, "DEEPSEEK_MODEL", ""),
-        database_url=_get(values, "DATABASE_URL", ""),
+        database_url=_get(values, "DATABASE_URL", "") or _get(values, "TEST_DATABASE_URL", ""),
         milvus_uri=_get(values, "MILVUS_URI", "http://localhost:19530"),
         milvus_collection=_get(values, "MILVUS_COLLECTION", "study_materials"),
     )

@@ -309,10 +309,39 @@ class TestF5Stage3ReviewReport:
         report = use_case.execute(plan, current_date=CURRENT_DATE, user_review_text="递归理解不稳定")
 
         assert isinstance(report, ReviewReport)
-        assert report.completion_rate == pytest.approx(0.6)
-        assert report.overdue_tasks
+        assert report.completion_rate == pytest.approx(0.5)
+        assert report.overdue_tasks == []
         assert report.weak_points
         assert report.suggestions
+
+    def test_f5_3_01b_review_report_metrics_use_real_plan_state_not_llm_numbers(self):
+        """原因：真实 LLM 可能编造完成率，统计数字必须来自当前计划。"""
+        tasks = [make_task(f"task-{index}", status="done" if index == 1 else "todo") for index in range(1, 28)]
+        plan = valid_plan(tasks=tasks)
+        payload = review_payload(
+            completion_rate=0.25,
+            completed_task_count=5,
+            total_task_count=20,
+            suggestions="1. 优先补足循环和函数模块；2. 设定每日小目标；3. 使用思维导图梳理知识点",
+        )
+        use_case = GenerateReviewReportUseCase(llm=FakeReviewLLM(payload))
+
+        report = use_case.execute(plan, current_date=CURRENT_DATE)
+
+        assert report.total_task_count == 27
+        assert report.completed_task_count == 1
+        assert report.completion_rate == pytest.approx(1 / 27)
+        assert report.suggestions == ["优先补足循环和函数模块", "设定每日小目标", "使用思维导图梳理知识点"]
+
+    def test_f5_3_01c_review_report_overdue_tasks_use_real_plan_state(self):
+        """原因：延期任务必须从当前计划日期和状态识别，不能由 LLM 编造。"""
+        plan = valid_plan(tasks=[make_task("late", date=CURRENT_DATE - timedelta(days=1), status="todo")])
+        payload = review_payload(overdue_tasks=["fake-late-task"])
+        use_case = GenerateReviewReportUseCase(llm=FakeReviewLLM(payload))
+
+        report = use_case.execute(plan, current_date=CURRENT_DATE)
+
+        assert report.overdue_tasks == ["late"]
 
     def test_f5_3_02_real_llm_switch_uses_deepseek_adapter(self, tmp_path):
         """原因：所有涉及 LLM 的功能都必须服从统一 USE_REAL_LLM 开关。"""

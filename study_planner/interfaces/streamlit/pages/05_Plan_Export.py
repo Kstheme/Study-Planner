@@ -15,10 +15,13 @@ from study_planner.application.plan_export import (
     build_download_payload,
     build_export_page_view,
 )
+from study_planner.interfaces.streamlit.persistence_state import render_storage_status, restore_persistent_state
 
 
 st.set_page_config(page_title="学习计划导出", page_icon="📤", layout="wide")
 st.title("学习计划导出")
+restore_persistent_state()
+render_storage_status()
 
 
 def _render_workflow_hint() -> None:
@@ -52,12 +55,7 @@ def _render_report_summary(report) -> None:
 
 def _build_export(format_name: str):
     use_case = ExportStudyPlanUseCase.from_session(st.session_state)
-    return use_case.execute(
-        ExportRequest(
-            format=format_name,
-            exported_at=datetime.now(),
-        )
-    )
+    return use_case.execute(ExportRequest(format=format_name, exported_at=datetime.now()))
 
 
 _render_workflow_hint()
@@ -71,7 +69,7 @@ if not view.can_export:
     st.stop()
 
 if st.session_state.get("pending_adjusted_plan") is not None:
-    st.warning("检测到尚未保存的调整预览。导出默认使用当前已确认计划；如需导出调整结果，请先在“复盘与动态调整”页面保存。")
+    st.warning("检测到尚未保存的调整预览。导出默认使用当前已确认计划；如需导出调整结果，请先在复盘与动态调整页面保存。")
 
 st.subheader("导出对象")
 _render_summary(view)
