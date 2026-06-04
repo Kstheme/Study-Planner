@@ -124,9 +124,10 @@ class GenerateReviewReportUseCase:
             raise ReviewReplanError("需要先生成学习计划")
 
         period_start, period_end = _week_bounds(current_date)
-        progress = calculate_period_progress(study_plan, period_start, period_end)
-        overdue_tasks = identify_overdue_tasks(progress.period_tasks, current_date)
-        consecutive_topics = identify_consecutive_unfinished_topics(progress.period_tasks)
+        progress = calculate_plan_progress(study_plan, period_start, period_end)
+        plan_tasks = list(iter_tasks(study_plan))
+        overdue_tasks = identify_overdue_tasks(plan_tasks, current_date)
+        consecutive_topics = identify_consecutive_unfinished_topics(plan_tasks)
         request = ReviewLLMRequest(
             study_plan=study_plan,
             current_date=current_date,
@@ -138,7 +139,8 @@ class GenerateReviewReportUseCase:
             consecutive_unfinished_topics=consecutive_topics,
         )
         payload = self.llm.generate_review_report(request)
-        return _review_report_from_payload(payload)
+        report = _review_report_from_payload(payload)
+        return _normalize_review_report(report, request)
 
 
 class LocalReviewLLM:
@@ -240,6 +242,22 @@ def calculate_period_progress(study_plan: StudyPlan, period_start: date, period_
         _validate_task_status(task.status)
         if period_start <= task.date <= period_end:
             tasks.append(task)
+    completed = sum(1 for task in tasks if task.status == "done")
+    total = len(tasks)
+    return PeriodProgress(
+        period_start=period_start,
+        period_end=period_end,
+        period_tasks=tasks,
+        total_task_count=total,
+        completed_task_count=completed,
+        completion_rate=completed / total if total else 0,
+    )
+
+
+def calculate_plan_progress(study_plan: StudyPlan, period_start: date, period_end: date) -> PeriodProgress:
+    tasks = list(iter_tasks(study_plan))
+    for task in tasks:
+        _validate_task_status(task.status)
     completed = sum(1 for task in tasks if task.status == "done")
     total = len(tasks)
     return PeriodProgress(
@@ -518,7 +536,22 @@ def _review_report_from_payload(payload: Any) -> ReviewReport:
         consecutive_unfinished_topics=_coerce_string_list(payload["consecutive_unfinished_topics"]),
         weak_points=_coerce_string_list(payload["weak_points"]),
         summary=str(payload["summary"]),
-        suggestions=_coerce_string_list(payload["suggestions"]),
+        suggestions=_coerce_suggestion_list(payload["suggestions"]),
+    )
+
+
+def _normalize_review_report(report: ReviewReport, request: ReviewLLMRequest) -> ReviewReport:
+    return ReviewReport(
+        period_start=request.period_start,
+        period_end=request.period_end,
+        completion_rate=request.progress.completion_rate,
+        completed_task_count=request.progress.completed_task_count,
+        total_task_count=request.progress.total_task_count,
+        overdue_tasks=[stable_task_id(task) for task in request.overdue_tasks],
+        consecutive_unfinished_topics=request.consecutive_unfinished_topics,
+        weak_points=_dedupe(report.weak_points or request.consecutive_unfinished_topics or request.study_plan.goal.weak_points),
+        summary=report.summary,
+        suggestions=_dedupe(_coerce_suggestion_list(report.suggestions)),
     )
 
 
@@ -568,6 +601,18 @@ def _coerce_string_list(value: Any) -> list[str]:
     if not text or text == "0":
         return []
     return [part.strip() for part in re.split(r"[,，、\n]", text) if part.strip()]
+
+
+def _coerce_suggestion_list(value: Any) -> list[str]:
+    raw_items = _coerce_string_list(value)
+    suggestions: list[str] = []
+    for item in raw_items:
+        parts = re.split(r"(?:^|\s|[;；。])\d+[\.、)]\s*", item)
+        for part in parts:
+            cleaned = re.sub(r"^\s*[-•]\s*", "", part).strip(" ;；。")
+            if cleaned:
+                suggestions.append(cleaned)
+    return suggestions
 
 
 def _extract_json_text(response: str) -> str:

@@ -20,18 +20,32 @@ from study_planner.application.review_replan import (
     save_adjusted_plan,
     validate_adjusted_plan,
 )
+from study_planner.application.persistence import StorageError
+from study_planner.interfaces.streamlit.persistence_state import render_storage_status, restore_persistent_state
 
 
 st.set_page_config(page_title="复盘与动态调整", page_icon="🧭", layout="wide")
 st.title("复盘与动态调整")
+storage_service = restore_persistent_state()
+render_storage_status()
 
 
 class SessionPlanRepository:
+    def __init__(self, service):
+        self.service = service
+        self.pending_report = None
+
     def save_review_report(self, report):
         st.session_state["last_review_report"] = report
+        self.pending_report = report
 
     def save_study_plan(self, plan):
         st.session_state["study_plan"] = plan
+        if self.pending_report is not None:
+            plan_id = self.service.save_adjusted_plan(plan, self.pending_report)
+        else:
+            plan_id = self.service.save_study_plan(plan, goal_id=st.session_state.get("selected_goal_id"))
+        st.session_state["selected_plan_id"] = plan_id
 
 
 STATUS_LABELS = {
@@ -109,9 +123,12 @@ if generate_clicked:
             user_review_text=review_text,
         )
         st.session_state["last_review_report"] = report
+        plan_id = st.session_state.get("selected_plan_id")
+        if plan_id:
+            storage_service.save_review_report(report, plan_id=plan_id)
         st.success("复盘已生成")
         st.rerun()
-    except (ReviewReplanError, ValueError) as exc:
+    except (ReviewReplanError, ValueError, StorageError) as exc:
         st.error(str(exc))
 
 if replan_clicked:
@@ -130,10 +147,11 @@ if replan_clicked:
         )
         validation = validate_adjusted_plan(preview.adjusted_plan, current_date=date.today())
         st.session_state["last_review_report"] = report
+        st.session_state["pending_review_report"] = report
         st.session_state["adjustment_warnings"] = validation.warnings
         st.success("调整预览已生成")
         st.rerun()
-    except (ReviewReplanError, ValueError) as exc:
+    except (ReviewReplanError, ValueError, StorageError) as exc:
         st.error(str(exc))
 
 if cancel_clicked:
@@ -195,7 +213,7 @@ if pending_plan:
         try:
             save_adjusted_plan(
                 st.session_state,
-                repository=SessionPlanRepository(),
+                repository=SessionPlanRepository(storage_service),
                 current_date=date.today(),
             )
             st.session_state.pop("adjustment_warnings", None)

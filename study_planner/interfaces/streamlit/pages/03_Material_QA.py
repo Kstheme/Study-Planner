@@ -21,10 +21,13 @@ from study_planner.application.material_rag import (
     summarize_material,
 )
 from study_planner.infrastructure.rag.factory import build_material_rag_services
+from study_planner.interfaces.streamlit.persistence_state import render_storage_status, restore_persistent_state
 
 
-st.set_page_config(page_title="资料问答", page_icon="📚", layout="wide")
-st.title("📚 资料问答")
+st.set_page_config(page_title="资料问答", page_icon="📎", layout="wide")
+st.title("📎 资料问答")
+storage_service = restore_persistent_state()
+render_storage_status()
 
 
 class UploadedFileAdapter:
@@ -37,12 +40,12 @@ class UploadedFileAdapter:
 
 
 def _init_state() -> None:
-    st.session_state.setdefault("materials", [])
     st.session_state.setdefault("material_chunks", [])
     st.session_state.setdefault("latest_answer", None)
     st.session_state.setdefault("material_summary", "")
     st.session_state.setdefault("flashcards", [])
     st.session_state.setdefault("knowledge_points", [])
+    st.session_state.setdefault("materials", storage_service.material_repository.list_all())
 
 
 def _services():
@@ -63,7 +66,14 @@ def _process_and_save_material(material):
         vector_store=services.vector_store,
     )
     _save_vector_store(services.vector_store)
-    st.session_state["materials"].append(processed)
+    storage_service.material_repository.save(processed)
+    existing_ids = {item.id for item in st.session_state["materials"]}
+    if processed.id not in existing_ids:
+        st.session_state["materials"].append(processed)
+    else:
+        st.session_state["materials"] = [
+            processed if item.id == processed.id else item for item in st.session_state["materials"]
+        ]
     return processed
 
 
@@ -109,7 +119,7 @@ with upload_col:
                 if processed.status == "failed":
                     st.error(f"{processed.filename} 处理失败：{processed.error_message}")
                 else:
-                    st.success(f"{processed.filename} 已处理")
+                    st.success(f"{processed.filename} 已处理并保存元数据")
             except MaterialRAGError as exc:
                 st.error(str(exc))
 
@@ -124,7 +134,7 @@ with note_col:
             if processed.status == "failed":
                 st.error(f"{processed.filename} 处理失败：{processed.error_message}")
             else:
-                st.success(f"{processed.filename} 已处理")
+                st.success(f"{processed.filename} 已处理并保存元数据")
         except MaterialRAGError as exc:
             st.error(str(exc))
 
@@ -162,7 +172,7 @@ if ask_clicked:
         elif route.name == "knowledge_points":
             st.session_state["knowledge_points"] = extract_knowledge_points(_all_chunks(), llm=llm)
         elif route.name == "concept_explain":
-            concept = question.replace("解释", "").replace("一下", "").strip() or question
+            concept = question.replace("解释", "").replace("一个", "").strip() or question
             st.session_state["latest_answer"] = explain_concept(concept, chunks=_all_chunks(), llm=llm)
         else:
             st.session_state["latest_answer"] = ask_material_question(
@@ -194,7 +204,7 @@ if st.session_state["latest_answer"]:
     st.markdown("#### 引用来源")
     if answer.citations:
         for citation in answer.citations:
-            with st.expander(f"{citation.filename} · {citation.chunk_id} · score {citation.score:.4f}"):
+            with st.expander(f"{citation.filename} | {citation.chunk_id} | score {citation.score:.4f}"):
                 if citation.page_number:
                     st.caption(f"页码：{citation.page_number}")
                 st.write(citation.snippet)

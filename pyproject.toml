@@ -9,3 +9,8 @@ dependencies = [
     "pymilvus>=2.5.0",
     "pymupdf>=1.24.0",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: tests that require external services such as PostgreSQL",
+]

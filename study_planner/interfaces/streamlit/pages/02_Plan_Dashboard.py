@@ -8,6 +8,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from study_planner.application.persistence import InvalidTaskUpdateError, StorageError
 from study_planner.application.plan_dashboard import (
     DashboardValidationError,
     build_dashboard_view,
@@ -23,6 +24,12 @@ from study_planner.domain.models import (
     TimeBudget,
     WeeklyPlan,
 )
+from study_planner.interfaces.streamlit.persistence_state import (
+    ensure_stable_task_ids,
+    render_storage_status,
+    restore_persistent_state,
+    save_plan_to_storage,
+)
 
 
 STATUS_LABELS = {
@@ -34,23 +41,36 @@ STATUS_LABELS = {
 
 
 st.set_page_config(page_title="学习计划看板", page_icon="📋", layout="wide")
-
 st.title("📋 学习计划看板")
+storage_service = restore_persistent_state()
+render_storage_status()
 
 
 def _ensure_task_ids(plan: StudyPlan) -> StudyPlan:
-    counter = 1
-    for phase in plan.phases:
-        for weekly_plan in phase.weekly_plans:
-            for task in weekly_plan.tasks:
-                if not task.id:
-                    task.id = f"task-{counter}"
-                counter += 1
-    return plan
+    return ensure_stable_task_ids(plan)
+
+
+def _has_missing_task_ids(plan: StudyPlan) -> bool:
+    return any(
+        not task.id
+        for phase in plan.phases
+        for weekly_plan in phase.weekly_plans
+        for task in weekly_plan.tasks
+    )
 
 
 def _save_plan(plan: StudyPlan) -> None:
-    st.session_state["study_plan"] = _ensure_task_ids(plan)
+    plan = _ensure_task_ids(plan)
+    try:
+        plan_id = save_plan_to_storage(
+            storage_service,
+            plan,
+            goal_id=st.session_state.get("selected_goal_id"),
+        )
+        st.session_state["selected_plan_id"] = plan_id
+    except StorageError as exc:
+        st.session_state["study_plan"] = plan
+        st.warning(f"计划已更新到当前页面，但持久化保存失败：{exc}")
 
 
 def _load_demo_plan() -> StudyPlan:
@@ -63,8 +83,8 @@ def _load_demo_plan() -> StudyPlan:
         daily_available_minutes=120,
         weekly_available_days=5,
         preferred_methods=["视频教程", "实践项目"],
-        weak_points=["缺乏编程经验"],
-        extra_requirements="希望多安排练习任务",
+        weak_points=["缺少编程经验"],
+        extra_requirements="多安排练习任务",
     )
     tasks = [
         StudyTask(
@@ -72,10 +92,10 @@ def _load_demo_plan() -> StudyPlan:
             title="学习变量与数据类型",
             date=today,
             duration_minutes=60,
-            task_type="学习",
+            task_type="study",
             related_topics=["变量", "数据类型"],
             learning_method="视频教程 + 练习",
-            expected_output="完成 10 道变量和数据类型练习。",
+            expected_output="完成 10 道变量和数据类型练习",
             review_required=True,
             status="todo",
         ),
@@ -84,10 +104,10 @@ def _load_demo_plan() -> StudyPlan:
             title="完成基础语法复习",
             date=today,
             duration_minutes=30,
-            task_type="复习",
+            task_type="review",
             related_topics=["变量", "数据类型"],
             learning_method="错题回顾",
-            expected_output="整理 3 条易错点。",
+            expected_output="整理 3 条易错点",
             review_required=True,
             status="todo",
         ),
@@ -102,7 +122,7 @@ def _load_demo_plan() -> StudyPlan:
                 objective="掌握 Python 基础语法和基本编程思维。",
                 start_date=today,
                 end_date=today + timedelta(days=13),
-                milestone="能够完成变量、条件、循环和函数相关练习。",
+                milestone="能完成变量、条件、循环和函数相关练习。",
                 weekly_plans=[
                     WeeklyPlan(
                         week_index=1,
@@ -146,8 +166,8 @@ def _format_task(task: StudyTask) -> dict:
 
 
 def _render_task_editor(plan: StudyPlan, task: StudyTask) -> None:
-    with st.expander(f"{task.title} · {STATUS_LABELS.get(task.status, task.status)}", expanded=False):
-        st.caption(f"{task.date.isoformat()} · {task.duration_minutes} 分钟 · {task.task_type}")
+    with st.expander(f"{task.title} | {STATUS_LABELS.get(task.status, task.status)}", expanded=False):
+        st.caption(f"{task.date.isoformat()} | {task.duration_minutes} 分钟 | {task.task_type}")
         st.write(f"知识点：{', '.join(task.related_topics) if task.related_topics else '无'}")
         st.write(f"学习方法：{task.learning_method or '未设置'}")
         st.write(f"预期产出：{task.expected_output or '未设置'}")
@@ -174,24 +194,40 @@ def _render_task_editor(plan: StudyPlan, task: StudyTask) -> None:
 
         if st.button("保存任务修改", key=f"save_{task.id}"):
             try:
-                updated = update_task(
-                    plan=plan,
-                    task_id=task.id,
-                    status=new_status,
-                    new_date=new_date,
-                    duration_minutes=int(new_duration),
-                    notes=new_notes,
-                    today=date.today(),
-                )
-                _save_plan(updated)
-                st.success("任务已更新")
+                plan_id = st.session_state.get("selected_plan_id")
+                if plan_id:
+                    updated = storage_service.update_task(
+                        plan_id,
+                        task.id,
+                        status=new_status,
+                        new_date=new_date,
+                        duration_minutes=int(new_duration),
+                        notes=new_notes,
+                    )
+                    st.session_state["study_plan"] = updated
+                else:
+                    updated = update_task(
+                        plan=plan,
+                        task_id=task.id,
+                        status=new_status,
+                        new_date=new_date,
+                        duration_minutes=int(new_duration),
+                        notes=new_notes,
+                        today=date.today(),
+                    )
+                    _save_plan(updated)
+                st.success("任务已保存，刷新页面后仍会保留。")
                 st.rerun()
-            except DashboardValidationError as exc:
-                st.error(str(exc))
+            except (DashboardValidationError, InvalidTaskUpdateError, StorageError) as exc:
+                st.error(f"保存失败：{exc}")
 
 
 if "study_plan" in st.session_state and st.session_state["study_plan"] is not None:
-    st.session_state["study_plan"] = _ensure_task_ids(st.session_state["study_plan"])
+    restored_plan = st.session_state["study_plan"]
+    if _has_missing_task_ids(restored_plan):
+        _save_plan(restored_plan)
+    else:
+        st.session_state["study_plan"] = _ensure_task_ids(restored_plan)
 
 view = build_dashboard_view(st.session_state.get("study_plan"), today=date.today())
 
