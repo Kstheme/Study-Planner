@@ -1,0 +1,91 @@
+%% ─── Study Planner — Layered Architecture ───
+%%  Render: mmdc -i architecture.mmd -o architecture.svg -t neutral -b white
+
+flowchart TB
+    %% ── INTERFACE ──
+    subgraph INTERFACE["🎨 Streamlit 界面层"]
+        direction LR
+        A1["🏠 学习首页"]
+        A2["🎯 目标配置"]
+        A3["📊 计划看板"]
+        A4["📚 资料问答"]
+        A5["🔄 复盘调整"]
+        A6["📄 导出报告"]
+    end
+
+    %% ── APPLICATION ──
+    subgraph APP["⚙️ Application 用例层"]
+        direction LR
+        B1["GenerateStudyPlanUseCase"]
+        B2["GenerateReviewReportUseCase"]
+        B3["PlanDashboardUseCase"]
+        B4["MaterialRAGUseCase"]
+        B5["PlanExportUseCase"]
+        B6["AgentWorkflowUseCase"]
+    end
+
+    %% ── DOMAIN ──
+    subgraph DOMAIN["🧠 Domain 领域层"]
+        direction LR
+        C1["StudyGoal"]
+        C2["StudyPlan"]
+        C3["StudyTask"]
+        C4["ReviewReport"]
+        C5["LearningMaterial"]
+        C6["ReplanRequest"]
+    end
+
+    %% ── INFRASTRUCTURE ──
+    subgraph INFRA["🔧 Infrastructure 基础设施层"]
+        direction LR
+        subgraph LLM["LLM 适配器"]
+            D1["RealStudyPlanLLM"]
+            D2["DeepSeekMaterialLLM"]
+        end
+        subgraph DB["持久化"]
+            D3["PostgresRepository"]
+            D4["MaterialRepository"]
+        end
+        subgraph RAG["RAG 引擎"]
+            D5["PDFParser"]
+            D6["TextParser"]
+            D7["VectorStore"]
+        end
+    end
+
+    %% ── EXTERNAL ──
+    subgraph EXT["🌐 外部服务"]
+        direction LR
+        E1[("DeepSeek API<br/>LLM")]
+        E2[("PostgreSQL<br/>持久化")]
+        E3[("Milvus<br/>向量检索")]
+    end
+
+    %% ── AGENTS ──
+    subgraph AGENTS["🤖 Agent 工作流"]
+        direction LR
+        F1["ProfileAgent"]
+        F2["KnowledgeAgent"]
+        F3["PlannerAgent"]
+        F4["CriticAgent"]
+        F5["OutputAgent"]
+    end
+
+    %% ── Edges ──
+    INTERFACE --> APP
+    APP --> DOMAIN
+    APP --> AGENTS
+    DOMAIN --> INFRA
+    INFRA --> EXT
+    AGENTS --> DOMAIN
+
+    %% ── Styles ──
+    style INTERFACE fill:#E3F2FD,stroke:#1E88E5,stroke-width:2px,color:#0D47A1
+    style APP      fill:#E8F5E9,stroke:#43A047,stroke-width:2px,color:#1B5E20
+    style DOMAIN   fill:#FFF3E0,stroke:#FB8C00,stroke-width:2px,color:#E65100
+    style INFRA    fill:#FCE4EC,stroke:#E53935,stroke-width:2px,color:#B71C1C
+    style EXT      fill:#EDE7F6,stroke:#7B1FA2,stroke-width:2px,color:#4A148C
+    style AGENTS   fill:#E0F7FA,stroke:#00838F,stroke-width:2px,color:#004D40
+    style LLM      fill:#FFF8E1,stroke:#FFA000
+    style DB       fill:#FFF8E1,stroke:#FFA000
+    style RAG      fill:#FFF8E1,stroke:#FFA000

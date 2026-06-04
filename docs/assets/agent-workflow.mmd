@@ -1,0 +1,80 @@
+%% ─── Study Planner — Agent Workflow Pipeline ───
+%%  Render: mmdc -i agent-workflow.mmd -o agent-workflow.svg -t neutral -b white
+
+flowchart LR
+    %% ── INPUT ──
+    GOAL["🎯<br/>StudyGoal<br/><br/>学科·目标·截止日期<br/>时间预算·薄弱点"]
+
+    %% ── RULE-BASED AGENTS ──
+    subgraph RULE["📐 规则引擎 Agents"]
+        direction LR
+        PROFILE["👤 ProfileAgent<br/><br/>分析学习者画像<br/>评估风险等级<br/><br/>📋 输出: LearnerProfile"]
+        CRITIC["🔍 CriticAgent<br/><br/>硬约束校验<br/>· 截止日期<br/>· 每日负载<br/>· 依赖顺序<br/><br/>📋 输出: CriticReview"]
+        OUTPUT["📄 OutputAgent<br/><br/>数据规范化<br/>日期转换·ID 唯一<br/>状态校验<br/><br/>📋 输出: StudyPlan"]
+    end
+
+    %% ── LLM-POWERED AGENTS ──
+    subgraph LLM["🧠 LLM 增强 Agents"]
+        direction LR
+        KNOWLEDGE["📚 KnowledgeAgent<br/><br/>知识点分解<br/>前置依赖链<br/>难度·重要性<br/><br/>📋 输出: KnowledgePoint[]"]
+        RESOURCE["🔗 ResourceAgent<br/><br/>RAG 检索学习资料<br/>按知识点匹配<br/><br/>📋 输出: LearningResource[]"]
+        PLANNER["📝 PlannerAgent<br/><br/>生成阶段·周·日计划<br/>接收上游完整上下文<br/><br/>📋 输出: StudyPlan (draft)"]
+    end
+
+    %% ── REPAIR LOOP ──
+    subgraph LOOP["🔄 Repair Loop (最多 2 次重试)"]
+        direction TB
+        PLANNER_LOOP["PlannerAgent<br/>根据反馈重新生成"]
+        CRITIC_LOOP["CriticAgent<br/>校验结构合法性"]
+        DECISION{"通过?"}
+        PLANNER_LOOP --> CRITIC_LOOP --> DECISION
+        DECISION -->|"❌ 未通过<br/>传入 issues 反馈"| PLANNER_LOOP
+        DECISION -->|"✅ 通过"| OUT_NODE["进入 OutputAgent"]
+    end
+
+    %% ── REVIEW PATH ──
+    subgraph REVIEW["📈 复盘与调整"]
+        direction LR
+        PROGRESS["📊 ProgressAgent<br/><br/>计算完成率<br/>逾期任务·薄弱点<br/><br/>📋 输出: ProgressContext"]
+        REPLAN["🔧 ReplanPlanner<br/><br/>保留已完成任务<br/>重排未完成项<br/>追加强化练习"]
+    end
+
+    %% ── FLOW ──
+    GOAL --> PROFILE
+    GOAL --> KNOWLEDGE
+    PROFILE --> KNOWLEDGE
+    KNOWLEDGE --> RESOURCE
+    KNOWLEDGE --> PLANNER
+    RESOURCE --> PLANNER
+    PROFILE --> PLANNER
+    PLANNER --> LOOP
+    LOOP --> OUTPUT
+    OUTPUT --> PLAN["✅<br/>StudyPlan<br/>最终学习计划"]
+
+    PLAN --> PROGRESS
+    PROGRESS --> REPLAN
+    REPLAN -.->|"调整后继续执行"| PLAN
+
+    %% ── STYLES ──
+    style RULE        fill:#E3F2FD,stroke:#1E88E5,stroke-width:2px,color:#0D47A1
+    style LLM         fill:#FFF3E0,stroke:#FB8C00,stroke-width:2px,color:#E65100
+    style LOOP        fill:#FFEBEE,stroke:#E53935,stroke-width:2px,color:#B71C1C
+    style REVIEW      fill:#E8F5E9,stroke:#43A047,stroke-width:2px,color:#1B5E20
+
+    style GOAL        fill:#F3E5F5,stroke:#8E24AA,stroke-width:2px,color:#4A148C
+    style PLAN        fill:#E8F5E9,stroke:#43A047,stroke-width:3px,color:#1B5E20
+    style DECISION    fill:#FFF9C4,stroke:#F9A825,stroke-width:2px
+
+    style PROFILE     fill:#BBDEFB,stroke:#1976D2,stroke-width:1px
+    style CRITIC      fill:#BBDEFB,stroke:#1976D2,stroke-width:1px
+    style OUTPUT      fill:#BBDEFB,stroke:#1976D2,stroke-width:1px
+    style PROGRESS    fill:#C8E6C9,stroke:#388E3C,stroke-width:1px
+    style REPLAN      fill:#C8E6C9,stroke:#388E3C,stroke-width:1px
+
+    style KNOWLEDGE   fill:#FFE0B2,stroke:#F57C00,stroke-width:1px
+    style RESOURCE    fill:#FFE0B2,stroke:#F57C00,stroke-width:1px
+    style PLANNER     fill:#FFE0B2,stroke:#F57C00,stroke-width:1px
+
+    style PLANNER_LOOP fill:#FFCDD2,stroke:#C62828,stroke-width:1px
+    style CRITIC_LOOP  fill:#FFCDD2,stroke:#C62828,stroke-width:1px
+    style OUT_NODE     fill:#C8E6C9,stroke:#388E3C,stroke-width:1px
