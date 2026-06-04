@@ -1,270 +1,345 @@
-# Study-Planner 智能学习助手
+# Study Planner 智能学习规划助手
 
-Study-Planner 是一个基于 Streamlit 的智能学习助手。它可以帮助用户填写学习目标、生成结构化学习计划、编辑任务进度、上传学习资料，并基于资料进行问答、摘要、复习卡片和知识点提取。
+> 一个把学习目标拆成可执行计划、追踪真实进度、基于资料问答、自动复盘调整，并导出专业学习报告的 AI 学习工作台。
 
-这个项目按“边学习边做项目”的方式构建，重点不是堆功能，而是练习可扩展架构：
+[![Python](https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-App-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io/)
+[![Tests](https://img.shields.io/badge/pytest-feature%20tested-0A7BBB?logo=pytest&logoColor=white)](https://docs.pytest.org/)
+[![License](https://img.shields.io/badge/License-MIT-16A34A)](./LICENSE)
 
-- `domain`：核心业务模型
-- `application`：用例和业务规则
-- `infrastructure`：LLM、解析器、RAG、PostgreSQL、Milvus 等具体实现
-- `interfaces/streamlit`：Streamlit 页面
-- `docs`：PRD、features、测试方案
-- `tests`：自动化测试
+[**English**](./README.md) | [**简体中文**](./README_zh.md)
 
-## 当前进度
+Study Planner 是一个基于 Streamlit 的智能学习助手。它不是只生成一份静态计划，而是围绕完整学习闭环设计：配置目标、生成计划、执行任务、资料问答、复盘分析、自动重排、导出报告。
 
-已完成：
+项目采用分层架构，区分 `domain`、`application`、`infrastructure`、`agents` 和 `interfaces/streamlit`。Fake 模式适合本地开发和测试，Real 模式可以接入 DeepSeek、PostgreSQL 和 Milvus。
 
-- F1：学习目标输入
-- F2-A：Fake LLM 学习计划生成
-- F2-B：DeepSeek 真实 LLM 学习计划生成
-- F3：学习计划展示与编辑
-- F4：资料上传、解析、RAG 问答、摘要、复习卡片、知识点提取
-- F4 真实模式切换：DeepSeek + PostgreSQL/Milvus
-- F5：详细测试用例文档
+![Study Planner 首页工作台](docs/assets/home-workspace.png)
 
-尚未完整实现：
+## 为什么做 Study Planner
 
-- F5 复盘与动态调整的应用层和页面逻辑
-- F6 导出
-- F7 全量学习计划、任务、复盘数据持久化
-- F8 LangGraph 多 Agent 工作流
+真正的学习不是"生成计划"就结束了。学习过程更像一个循环：
 
-## 功能说明
+1. 明确目标。
+2. 生成计划。
+3. 执行每日任务。
+4. 基于自己的资料提问。
+5. 复盘真实完成情况。
+6. 在不覆盖已完成任务的前提下重新安排。
+7. 导出可以保存、分享或打印的学习报告。
 
-### F1 学习目标输入
+Study Planner 把这个闭环做成了一个可测试、可扩展的 AI 应用。
 
-用户可以填写：
+## 核心亮点
 
-- 学习主题
-- 学习目标
-- 截止日期
-- 当前水平
-- 每日可学习时间
-- 每周可学习天数
-- 学习偏好
-- 薄弱点
-- 额外要求
+- **目标到计划生成**：根据学习主题、目标、截止日期、时间预算和偏好生成阶段、周计划、每日任务。
+- **Fake / Real 双模式**：FakeLLM 支持本地开发和自动化测试；Real 模式支持 DeepSeek。
+- **学习计划看板**：查看目标、阶段、今日任务、本周任务；编辑任务状态、日期、时长和备注。
+- **业务图表**：每日学习负载、任务状态分布、任务类型分析、高频知识点、复盘负载、资料质量。
+- **资料 RAG 问答**：支持 TXT、Markdown、PDF 和粘贴笔记；可问答、摘要、生成复习卡片和提取知识点。
+- **复盘与动态调整**：根据真实任务状态生成复盘报告，识别薄弱点，预览调整计划并保存。
+- **持久化**：开发模式可用内存存储；Real 模式支持 PostgreSQL repository。
+- **导出报告**：支持 Markdown 和美观的 HTML 学习报告。
+- **Agent 工作流**：包含 profile、knowledge、resource、planner、critic、output、progress 等模块化节点。
+- **更友好的 Streamlit UI**：中文侧边栏、首页引导、统一视觉、清爽配色和专业图表。
 
-系统会将表单数据转换为结构化 `StudyGoal`，供后续流程使用。
+## 产品预览
 
-### F2 智能学习计划生成
+### 1. 学习首页
 
-系统可以生成结构化 `StudyPlan`，包含：
+首页是学习工作台：展示当前计划状态、复盘状态、持久化状态、下一步建议，以及已有计划的分析图表。
 
-- 总体学习路线
-- 阶段目标
-- 周计划
-- 每日任务
-- 学习方法
-- 时间预算
-- 风险提示
-- 复习安排
+![学习首页](docs/assets/home-workspace.png)
 
-生成结果会经过应用层校验，再保存到 Streamlit Session State。
+### 2. 配置学习目标
 
-### F3 学习计划展示与编辑
+收集学习主题、学习目标、截止日期、当前水平、每日学习时间、每周学习天数、学习偏好、薄弱点和额外要求。
 
-看板支持：
+![配置学习目标](docs/assets/goal-setup.png)
 
-- 学习计划总览
-- 今日任务
-- 本周任务
-- 阶段和周视图
-- 进度统计
-- 修改任务状态
-- 修改任务日期、时长、备注
-- 校验每日学习时长是否超限
+### 3. 计划看板
 
-### F4 资料上传与问答
+展示学习计划、进度指标、业务图表、今日任务、本周任务、阶段计划和任务编辑控件。
 
-支持资料类型：
+![计划看板](docs/assets/plan-dashboard.png)
 
-- TXT
-- Markdown
-- PDF
-- 粘贴课程笔记
+### 4. 资料问答
 
-PDF 解析使用 PyMuPDF。文档解析模块已经抽象为 parser registry，后续要添加图片 OCR、音频转写，只需要新增 parser 并注册即可。
+上传或粘贴资料后，可以进行资料问答、概念解释、摘要、复习卡片和知识点提取，并展示引用来源。
 
-F4 页面支持：
+![资料问答](docs/assets/material-qa.png)
 
-- 上传并索引资料
-- 基于资料提问
-- 展示引用来源
-- 生成资料摘要
-- 生成复习卡片
-- 提取知识点
+### 5. 复盘与调整
 
-## 架构
+根据真实任务完成情况生成复盘报告，展示完成率、延期任务、薄弱点和建议，并预览调整前后差异。
+
+![复盘与调整](docs/assets/review-replan.png)
+
+### 6. 导出学习报告
+
+导出当前已确认学习计划和最近复盘报告，支持 Markdown 和 HTML。
+
+![HTML 导出报告](docs/assets/html-export-report.png)
+
+## 功能矩阵
+
+| 功能 | Fake 模式 | Real 模式 |
+| --- | --- | --- |
+| 学习目标输入 | 支持 | 支持 |
+| 学习计划生成 | FakeLLM | DeepSeek |
+| Agent 工作流 | Fake / 测试契约 | Real 工作流契约 |
+| 计划看板 | Session / 内存 | PostgreSQL 持久化 |
+| 任务编辑 | 支持 | 支持 |
+| 刷新恢复 | 支持 | PostgreSQL 恢复 |
+| 资料上传 | 本地解析 / 本地检索 | PostgreSQL + Milvus |
+| 资料问答 | 本地服务 / Fake | DeepSeek + Real RAG |
+| 复盘报告 | 本地逻辑 / Fake | DeepSeek 支持 |
+| 自动重排 | 可测试逻辑 | Real 工作流契约 |
+| Markdown 导出 | 支持 | 支持 |
+| HTML 导出 | 支持 | 支持 |
+
+## 架构设计
+
+Study Planner 采用分层架构：
 
 ```text
-Streamlit UI
-  -> Application 用例
-  -> Domain 模型
-  -> Infrastructure 适配器
-      -> LLM：FakeLLM / DeepSeek
-      -> RAG Store：本地内存 / PostgreSQL + Milvus
-      -> Parsers：note / text / markdown / PyMuPDF PDF
+Streamlit Interface
+  -> Application use cases
+  -> Domain models
+  -> Infrastructure adapters
+  -> External services
 ```
 
 核心目录：
 
 ```text
 study_planner/
-  application/
-    generate_study_plan.py
-    material_rag.py
-    plan_dashboard.py
-    study_goal_input.py
-  domain/
-    models.py
+  agents/                  # 计划生成和复盘调整相关 Agent
+  application/             # 用例、页面视图模型、业务规则
+  domain/                  # 核心数据模型
   infrastructure/
-    settings.py
-    llm/
-    rag/
+    db/                    # PostgreSQL repository
+    llm/                   # DeepSeek / Real LLM 适配器
+    rag/                   # Parser、Embedding、Vector Store 工厂
   interfaces/
-    streamlit/
-      app.py
-      pages/
-  prompts/
+    streamlit/             # Streamlit 入口、页面和 UI 组件
+  prompts/                 # Prompt 模板
+
+docs/
+  PRD.md
+  features.md
+  test_docs/
+  assets/                  # README 图片和视觉资源
+
+tests/
+  test_f1_*.py ... test_f9_*.py
 ```
 
-## 环境配置
+### 分层架构图
 
-复制 `.env.example` 为 `.env`，然后按需填写。
+![分层架构图](docs/assets/architecture.svg)
 
-关键开关：
+### Agent 编排管道
 
-```env
-USE_REAL_LLM=false
-USE_REAL_RAG_STORE=false
-```
+`PlannerWorkflow` 内的 6 Agent 串行管道，展示规则引擎与 LLM 增强节点的分工、Planner ↔ Critic 修复循环、以及复盘/重排路径。
 
-### 本地 Fake 模式
+![Agent 编排图](docs/assets/agent-workflow.svg)
 
-适合开发和跑自动化测试：
+### 产品流程图
 
-```env
-USE_REAL_LLM=false
-USE_REAL_RAG_STORE=false
-```
+从目标配置到执行、复盘、重排、导出的完整学习闭环。
 
-此模式使用：
+![产品流程图](docs/assets/learning-loop.svg)
 
-- 本地 Fake LLM
-- 本地内存检索
-- 不调用 DeepSeek
-- F4 运行时不依赖 PostgreSQL/Milvus
+## 快速开始
 
-### 真实 LLM + 本地检索
+### 环境要求
 
-适合测试 DeepSeek 回答效果，但暂时不使用真实数据库：
+- Python 3.12+
+- `uv`
+- Streamlit 运行环境
+- Real 模式可选依赖：
+  - DeepSeek API Key
+  - PostgreSQL
+  - Milvus
 
-```env
-USE_REAL_LLM=true
-USE_REAL_RAG_STORE=false
-DEEPSEEK_API_KEY=你的 key
-DEEPSEEK_BASE_URL=https://api.deepseek.com
-DEEPSEEK_MODEL=deepseek-chat
-```
-
-### 真实 LLM + 真实 RAG 存储
-
-适合测试 DeepSeek + PostgreSQL + Milvus：
-
-```env
-USE_REAL_LLM=true
-USE_REAL_RAG_STORE=true
-
-DATABASE_URL=postgresql+psycopg://user:password@localhost:5433/study_planner
-MILVUS_URI=http://localhost:19530
-MILVUS_COLLECTION=study_materials
-
-DEEPSEEK_API_KEY=你的 key
-DEEPSEEK_BASE_URL=https://api.deepseek.com
-DEEPSEEK_MODEL=deepseek-chat
-```
-
-当前真实 RAG 适配器会自动创建：
-
-- PostgreSQL 表：`rag_materials`、`rag_chunks`
-- Milvus collection 和 vector index
-
-注意：当前 embedding 仍然是项目里的本地演示版 embedding。PostgreSQL/Milvus 链路是真实的，但语义检索效果还不是生产级。
-
-## 安装依赖
-
-项目使用 `uv`：
+### 安装
 
 ```powershell
 uv sync
 ```
 
-如果当前环境缺少 Streamlit 或 pytest，可以安装：
+如果本地环境缺少 UI 或测试依赖，可以补充安装：
 
 ```powershell
-uv add streamlit pytest python-dotenv
+uv add streamlit pytest pandas altair python-dotenv
 ```
 
-## 启动项目
+### 启动
 
 ```powershell
 uv run streamlit run study_planner/interfaces/streamlit/app.py
 ```
 
-当前页面包括：
+打开：
 
-- Goal Setup
-- Plan Dashboard
-- Material QA
+```text
+http://localhost:8501
+```
 
-## 运行测试
+侧边栏页面名称：
 
-运行全部测试：
+- 学习首页
+- 配置学习目标
+- 计划看板
+- 资料问答
+- 复盘与调整
+- 导出学习报告
+
+## 配置说明
+
+复制 `.env.example` 为 `.env`，然后选择运行模式。
+
+### Fake 本地模式
+
+适合开发、UI 调试和自动化测试。
+
+```env
+USE_REAL_LLM=false
+USE_REAL_RAG_STORE=false
+USE_POSTGRES_PERSISTENCE=false
+```
+
+### Real LLM 模式
+
+使用 DeepSeek 生成学习计划、复盘和调整建议。
+
+```env
+USE_REAL_LLM=true
+DEEPSEEK_API_KEY=your_key
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-chat
+
+USE_REAL_RAG_STORE=false
+USE_POSTGRES_PERSISTENCE=false
+```
+
+### PostgreSQL 持久化模式
+
+使用 PostgreSQL 保存目标、计划、任务进度、复盘报告等数据。
+
+```env
+USE_POSTGRES_PERSISTENCE=true
+DATABASE_URL=postgresql://user:password@localhost:5432/study_planner
+```
+
+测试库可以配置：
+
+```env
+TEST_DATABASE_URL=postgresql://user:password@localhost:5432/study_planner_test
+```
+
+### Real RAG 模式
+
+使用 PostgreSQL / Milvus 存储和检索学习资料。
+
+```env
+USE_REAL_RAG_STORE=true
+MILVUS_URI=http://localhost:19530
+MILVUS_COLLECTION=study_materials
+```
+
+完整 Real 模式：
+
+```env
+USE_REAL_LLM=true
+DEEPSEEK_API_KEY=your_key
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-chat
+
+USE_POSTGRES_PERSISTENCE=true
+DATABASE_URL=postgresql://user:password@localhost:5432/study_planner
+
+USE_REAL_RAG_STORE=true
+MILVUS_URI=http://localhost:19530
+MILVUS_COLLECTION=study_materials
+```
+
+## 测试
+
+运行主测试套件：
 
 ```powershell
 uv run pytest
 ```
 
-运行单个 feature 测试：
+按功能运行：
 
 ```powershell
 uv run pytest tests/test_f1_study_goal_input.py
 uv run pytest tests/test_f2_generate_study_plan.py
-uv run pytest tests/test_f2b_real_llm_integration.py
 uv run pytest tests/test_f3_plan_dashboard_editing.py
 uv run pytest tests/test_f4_material_upload_rag.py
+uv run pytest tests/test_f5_review_replan.py
+uv run pytest tests/test_f6_plan_export.py
+uv run pytest tests/test_f7_persistence.py
+uv run pytest tests/test_f8_agent_workflow.py
+uv run pytest -m "not manual" tests/test_f9_streamlit_integration.py
 ```
 
-部分真实 LLM 测试受 `USE_REAL_LLM` 控制。如果不想调用 DeepSeek，请保持：
+配置好外部服务后，可以运行 Real 手动验收用例：
 
-```env
-USE_REAL_LLM=false
+```powershell
+uv run pytest -q -m manual tests/test_f9_streamlit_integration.py
 ```
 
-## 文档
+## 手动验收清单
 
-推荐阅读：
+Fake 模式：
 
-- `docs/PRD.md`：产品需求文档
-- `docs/features.md`：功能拆解
-- `docs/test_docs/F3_test.md`：F3 测试方案
-- `docs/test_docs/F4_test.md`：F4 测试方案
-- `docs/test_docs/F5_test.md`：F5 测试方案
+- 配置目标并生成学习计划。
+- 修改任务状态和备注，刷新后仍存在。
+- 添加资料笔记并提问。
+- 生成复盘报告。
+- 预览并保存自动重排结果。
+- 导出 HTML 并用浏览器打开。
 
-## 开发约定
+Real 模式：
 
-- Application 层不要直接调用 Streamlit、DeepSeek、PostgreSQL、Milvus。
-- Streamlit 页面只负责页面输入、展示和状态，不承载复杂业务逻辑。
-- 涉及 LLM 的地方必须服从统一 `USE_REAL_LLM` 开关。
-- 涉及 RAG 存储的地方必须服从 `USE_REAL_RAG_STORE` 开关。
-- 新增文档解析器放在 `study_planner/infrastructure/rag/parsers`。
+- DeepSeek 生成非 Fake 学习计划。
+- PostgreSQL 刷新后恢复计划和任务修改。
+- Real RAG 能返回引用来源。
+- 复盘指标和当前任务状态一致。
+- 自动重排不覆盖已完成任务。
+- HTML 导出使用最新已确认计划。
 
-## 下一步建议
+## UI 与信息架构说明
 
-1. 根据 `docs/test_docs/F5_test.md` 实现 F5 测试代码。
-2. 实现 F5 的进度分析、复盘报告、调整预览和保存逻辑。
-3. 添加 F5 Streamlit 页面。
-4. 完善学习计划和任务进度的 PostgreSQL 持久化。
-5. 将当前演示 embedding 替换为生产级 embedding 模型。
+当前没有新增独立"分析页"。分析被放在用户需要做决策的地方：
+
+- 计划相关分析在"计划看板"。
+- 资料相关分析在"资料问答"。
+- 复盘相关分析在"复盘与调整"。
+
+这样用户不用为了看数据额外跳页，使用路径更顺。
+
+## 开发原则
+
+- `domain` 不依赖 Streamlit、DeepSeek、PostgreSQL、Milvus。
+- `application` 承担用例和业务规则。
+- `infrastructure` 负责外部服务和存储适配。
+- Streamlit 页面只负责输入、展示和状态组织。
+- Fake / Real 模式必须服从 `.env` 开关。
+- 测试优先使用可复用、解耦的 helper，而不是只写端到端断言。
+
+## 路线图
+
+- 替换为生产级 embedding 模型和 reranker。
+- 增加 Real LLM 成本、耗时、错误恢复观测。
+- 从 HTML 报告进一步支持 PDF 导出。
+- 增强 Streamlit 页面视觉回归检查。
+- 支持认证和多用户计划归属。
+- 补充 Streamlit + PostgreSQL + Milvus 部署指南。
+
+## 开源许可
+
+本项目基于 MIT License 开源 — 详见 [LICENSE](./LICENSE)。

@@ -1,0 +1,58 @@
+%% ─── Study Planner — Learning Loop ───
+%%  Render: mmdc -i learning-loop.mmd -o learning-loop.svg -t neutral -b white
+
+flowchart LR
+    %% ── NODES ──
+    STEP1["🎯<br/><br/>配置学习目标<br/><br/><i>设定学科·目标<br/>截止日期·时间预算</i>"]
+    STEP2["📝<br/><br/>生成学习计划<br/><br/><i>AI 拆解知识点<br/>生成阶段·周·日任务</i>"]
+    STEP3["✅<br/><br/>每日执行任务<br/><br/><i>更新任务状态<br/>记录实际用时·备注</i>"]
+    STEP4["🤖<br/><br/>资料智能问答<br/><br/><i>上传教材·笔记<br/>RAG 检索 + AI 解答</i>"]
+    STEP5["📊<br/><br/>生成复盘报告<br/><br/><i>完成率·逾期分析<br/>薄弱点识别</i>"]
+    STEP6["🔧<br/><br/>智能重排计划<br/><br/><i>保留已完成任务<br/>调整未完成项</i>"]
+    STEP7["📄<br/><br/>导出学习报告<br/><br/><i>Markdown / HTML<br/>专业排版·可打印</i>"]
+
+    %% ── MAIN FLOW ──
+    STEP1 ==>|"①"| STEP2
+    STEP2 ==>|"②"| STEP3
+    STEP3 ==>|"③"| STEP4
+    STEP4 ==>|"④"| STEP5
+    STEP5 ==>|"⑤"| STEP6
+    STEP6 ==>|"⑥"| STEP7
+
+    %% ── FEEDBACK LOOPS ──
+    STEP6 -.->|"🔄 调整后继续执行"| STEP3
+    STEP5 -.->|"📈 监控薄弱点"| STEP4
+
+    %% ── SUB-LABELS ──
+    subgraph PLAN_PHASE["🗓️ 规划阶段"]
+        STEP1
+        STEP2
+    end
+
+    subgraph EXEC_PHASE["⚡ 执行阶段"]
+        STEP3
+        STEP4
+    end
+
+    subgraph REVIEW_PHASE["🔬 复盘阶段"]
+        STEP5
+        STEP6
+    end
+
+    subgraph EXPORT_PHASE["📦 产出阶段"]
+        STEP7
+    end
+
+    %% ── STYLES ──
+    style PLAN_PHASE   fill:#E3F2FD,stroke:#1E88E5,stroke-width:2px,color:#0D47A1
+    style EXEC_PHASE   fill:#FFF3E0,stroke:#FB8C00,stroke-width:2px,color:#E65100
+    style REVIEW_PHASE fill:#E8F5E9,stroke:#43A047,stroke-width:2px,color:#1B5E20
+    style EXPORT_PHASE fill:#F3E5F5,stroke:#8E24AA,stroke-width:2px,color:#4A148C
+
+    style STEP1 fill:#BBDEFB,stroke:#1976D2,stroke-width:2px,color:#0D47A1
+    style STEP2 fill:#BBDEFB,stroke:#1976D2,stroke-width:2px,color:#0D47A1
+    style STEP3 fill:#FFE0B2,stroke:#F57C00,stroke-width:2px,color:#E65100
+    style STEP4 fill:#FFE0B2,stroke:#F57C00,stroke-width:2px,color:#E65100
+    style STEP5 fill:#C8E6C9,stroke:#388E3C,stroke-width:2px,color:#1B5E20
+    style STEP6 fill:#C8E6C9,stroke:#388E3C,stroke-width:2px,color:#1B5E20
+    style STEP7 fill:#E1BEE7,stroke:#7B1FA2,stroke-width:2px,color:#4A148C
